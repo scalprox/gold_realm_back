@@ -1,18 +1,18 @@
 import "./sentry";
 import cookieParser from "cookie-parser"
-import express, { Request, Response } from "express";
 import * as Sentry from "@sentry/node";
+import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import { _jwt_payload } from "./types/models.type";
 
 dotenv.config();
 
-const allowedOrigins = ["http://localhost:3000", "https://fb1f-31-35-73-93.ngrok-free.app"]; // Liste des origines autorisées
+const allowedOrigins = ["http://localhost", "https://fb1f-31-35-73-93.ngrok-free.app"]; // Liste des origines autorisées
 const app = express();
 app.use(cookieParser())
 app.use(express.json())
-const PORT = process.env.PORT || 443;
+const PORT = process.env.PORT || 5000;
 
 // Middleware
 Sentry.setupExpressErrorHandler(app);
