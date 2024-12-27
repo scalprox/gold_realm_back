@@ -8,7 +8,7 @@ import { _jwt_payload } from "./types/models.type";
 
 dotenv.config();
 
-const allowedOrigins = ["http://localhost", "https://fb1f-31-35-73-93.ngrok-free.app"]; // Liste des origines autorisées
+const allowedOrigins = ["http://localhost:3000", "https://fb1f-31-35-73-93.ngrok-free.app"]; // Liste des origines autorisées
 const app = express();
 app.use(cookieParser())
 app.use(express.json())
