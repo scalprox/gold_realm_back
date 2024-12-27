@@ -12,7 +12,7 @@ const allowedOrigins = ["http://localhost:3000", "https://fb1f-31-35-73-93.ngrok
 const app = express();
 app.use(cookieParser())
 app.use(express.json())
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 80;
 
 // Middleware
 Sentry.setupExpressErrorHandler(app);
