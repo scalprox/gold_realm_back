@@ -17,54 +17,11 @@ const router = (0, express_1.Router)();
 router.get("/gold", (req, res) => {
     res.json({ message: "Voici l'or récolté !" });
 });
-router.get("/ask-auth/:pubkey", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const auth_message = yield (0, manage_user_1.get_auth_message)(req.params.pubkey);
-    if (auth_message) {
-        res.send(auth_message);
-    }
-    else {
-        res.statusCode = 500;
-        res.send("Unable to create message data");
-    }
-}));
-router.get("/user/:pubkey", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    // check cookie
-    const JWT = req.cookies.authToken;
-    const pubkey = req.params.pubkey;
-    if (!JWT || !pubkey) {
-        res.status(401).send({ message: "Unauthorized " });
-        return;
-    }
-    else {
-        //check token
-    }
-    res.send("");
-}));
+router.get("/ask-auth/:pubkey", manage_user_1.get_auth_message);
+router.get("/user/info", manage_user_1.check_jwt, manage_user_1.get_user_data);
+router.get("/user/logout", manage_user_1.logout);
 // route POST
-router.post("/verify-auth", (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { publicKey, signature } = req.body;
-        if (!publicKey || !signature) {
-            res.status(500).send({ message: "Missing data" });
-            return;
-        }
-        const create_auth_token = yield (0, manage_user_1.create_jwt)(signature.data, publicKey);
-        res.cookie("authToken", create_auth_token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
-            maxAge: 24 * 60 * 60 * 1000 //1day
-        });
-        res.status(200).json({ message: "Connected" });
-    }
-    catch (error) {
-        if (error instanceof Error) {
-            res.status(500).send(error.message);
-            return;
-        }
-        res.status(500).send("Unknown error");
-    }
-}));
+router.post("/verify-auth", manage_user_1.create_jwt);
 router.post("/gold", (req, res) => {
     const { amount } = req.body;
     res.json({ message: `Vous avez ajouté ${amount} pièces d'or !` });

@@ -42,9 +42,8 @@ const express_1 = __importDefault(require("express"));
 const Sentry = __importStar(require("@sentry/node"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const cors_1 = __importDefault(require("cors"));
-// Charger les variables d'environnement
 dotenv_1.default.config();
-const allowedOrigins = ["http://localhost:3000"]; // Liste des origines autorisées
+const allowedOrigins = ["http://localhost:3000", "https://fb1f-31-35-73-93.ngrok-free.app"]; // Liste des origines autorisées
 const app = (0, express_1.default)();
 app.use((0, cookie_parser_1.default)());
 app.use(express_1.default.json());
@@ -62,7 +61,6 @@ app.use((0, cors_1.default)({
     },
     credentials: true, // Autorise les cookies et les headers d'authentification
 }));
-app.use(express_1.default.json()); // Parser les JSON
 // Routes de base
 app.get("/", (req, res) => {
     res.send("Bienvenue sur le serveur !");
