@@ -53,6 +53,7 @@ export async function get_auth_message(req: Request, res: Response) {
 
     } catch (error) {
         res.status(500).json({ message: "Unknown error", error })
+        throw error
     }
 }
 

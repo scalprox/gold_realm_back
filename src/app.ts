@@ -31,6 +31,12 @@ app.use(
   })
 );
 
+app.use("/*", (req, res, next) => {
+  console.log(`${req.headers.host} => ${req.path} at ${new Date().toISOString}`);
+  next()
+
+})
+
 // Routes de base
 app.get("/", (req: Request, res: Response) => {
   res.send("Bienvenue sur le serveur !");
