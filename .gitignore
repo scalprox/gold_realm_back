@@ -23,3 +23,5 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# ssh -i "Gold Realm API.pem" ec2-user@ec2-51-44-23-161.eu-west-3.compute.amazonaws.com
