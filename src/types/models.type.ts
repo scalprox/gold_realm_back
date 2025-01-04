@@ -90,32 +90,71 @@ export interface _new_nft {
    */
   type: "miner" | "refiner"
   owner: string
+  name: string
+}
+
+export interface _nft_global_stats {
+  /**
+   * @info mint address
+   */
+  _id: string
+  amountOfOwner: number | 0
+  totalIngot: number | 0
+  totalNugget: number | 0
+  stucked: boolean
+  stuckedAt: Date | null
 }
 
 export interface _staked_nft_base {
-  _id: string;
+  /**
+   * @info Mint Address
+   */
+  _id: string
   mintAddress: string;
   type: "miner" | "refiner";
   owner: string;
-  stakedAt: Date | undefined;
-  unstakedAt: Date | undefined;
-  boosted: boolean;
-  onTrip: boolean;
-  tripStartedAt?: Date | undefined;
-  staked: boolean;
+  image: string | ""
+  isFrozen: boolean
+  name: string
+  activeTrip: {
+    tripId: number
+    startedAt: Date
+    endedAt: Date | null
+    totalEmitted: number
+    claimed: boolean
+    owner: string
+    lost: boolean
+    lostUntil: Date | null
+    stucked: boolean
+  } | null
 }
+
+export interface _user_owned_nft {
+  /**
+   * @info walletAddress
+   */
+  _id: string
+  miners: _miner_nft[]
+  refiners: _refiner_nft[]
+}
+
+
 
 export interface _miner_nft extends _staked_nft_base {
   type: "miner";
-  totalNuggetHarvested?: number;
-  levelHarvest?: number;
-  levelMemory?: number;
-
+  totalNuggetHarvested: number;
+  stats: {
+    levelHarvest: number;
+    levelMemory: number;
+  }
 }
+
 export interface _refiner_nft extends _staked_nft_base {
   type: "refiner";
-  levelRefine?: number;
-  totalGoldRefined?: number;
+  stats: {
+    levelRefine: number;
+  }
+  totalGoldRefined: number;
 }
 
 export type _staked_nft = _miner_nft | _refiner_nft
@@ -136,6 +175,8 @@ export interface _user_doc {
     allTimeIngots: number | 0
 
   }
+  owned_miners: _miner_nft[]
+  owned_refiners: _refiner_nft[]
 }
 
 export interface _jwt_payload {

@@ -6,7 +6,7 @@ import { _user_doc, _jwt_payload } from "../types/models.type"
 import jwt, { JwtPayload } from "jsonwebtoken"
 import nacl from "tweetnacl"
 import bs58 from "bs58"
-import { NextFunction, Request, response, Response } from "express"
+import { NextFunction, Request, Response } from "express"
 
 export async function get_auth_message(req: Request, res: Response) {
     //user send his pubKey
@@ -44,7 +44,10 @@ export async function get_auth_message(req: Request, res: Response) {
                     nuggetsBalance: 0,
                     allTimeIngots: 0,
                     allTimeNuggets: 0
-                }
+                },
+                owned_miners: [],
+                owned_refiners: [],
+
 
             })
         }
@@ -71,7 +74,7 @@ export async function check_jwt(req: Request, res: Response, next: NextFunction)
             res.status(500).json({ message: "Unauthorized: Internal" });
             return
         }
-        const decoded_jwt = jwt.verify(JWT, process.env.JWT_KEY as string) as unknown as _jwt_payload;
+        const decoded_jwt = jwt.verify(JWT, process.env.JWT_KEY as string) as _jwt_payload;
         const pubkey = decoded_jwt.pubkey
 
         if (decoded_jwt.exp < Date.now()) {
@@ -207,3 +210,4 @@ export function logout(req: Request, res: Response): void {
 
     }
 }
+

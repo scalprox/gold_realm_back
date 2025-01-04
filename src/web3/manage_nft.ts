@@ -1,13 +1,13 @@
 // need to implement logic to stake and unstake nft, first jsut via api call and mongoDb and next with blockchain
 import { mongo_client } from "../utils";
-import { _miner_nft, _new_nft, _refiner_nft, _staked_nft, _staked_nft_base } from "../types/models.type";
-
+import { _miner_nft, _new_nft, _refiner_nft, _staked_nft, _staked_nft_base, _user_doc } from "../types/models.type";
+import { Request, Response } from "express";
 //user send stake demand with an array of mintAddres / first check if nft is known otherwise create it in db with base score / then stake it
 
 
 
 export async function stake_nft(nfts: _new_nft[], walletAddress: string) {
-    // TODO check if user own the nfts before
+    // TODO check if user own the nfts before in wallet
     try {
         const mint_address_array: string[] = []
         for (const nft of nfts) {
@@ -15,25 +15,18 @@ export async function stake_nft(nfts: _new_nft[], walletAddress: string) {
         }
 
         const db = (await mongo_client.getInstance()).db("private_data")
-        const collection = db.collection<_staked_nft_base>("nfts")
+        const collection = db.collection<_staked_nft>("nfts")
         const existing_nft = await collection.find({ _id: { $in: mint_address_array } }).toArray()
 
         const update_nft_doc: _staked_nft[] = []
-        if (existing_nft) {
+        if (existing_nft.length > 0) {
             // some or all nft already exist in db
             for (const nft of existing_nft) {
-                if (nft.staked) continue
+                if (nft.isFrozen) continue
                 const updatedNft: _staked_nft = {
-                    _id: nft._id,
-                    type: nft.type,
-                    mintAddress: nft.mintAddress,
+                    ...nft,
                     owner: walletAddress,
-                    staked: true,
-                    unstakedAt: undefined,
-                    stakedAt: new Date(),
-                    boosted: false,
-                    onTrip: false,
-
+                    isFrozen: true,
                 };
                 update_nft_doc.push(updatedNft);
             }
@@ -66,6 +59,7 @@ export async function stake_nft(nfts: _new_nft[], walletAddress: string) {
             }));
 
             await collection.bulkWrite(bulkOps);
+            await update_user_nft_amount(walletAddress)
         }
         return { message: "NFT Staked", error: "" }
     } catch (error) {
@@ -80,25 +74,18 @@ export async function unstake_nft(nfts: string[], walletAddress: string) {
     // TODO check if user own the nfts before
     try {
         const db = (await mongo_client.getInstance()).db("private_data")
-        const collection = db.collection<_staked_nft_base>("nfts")
+        const collection = db.collection<_staked_nft>("nfts")
         const existing_nft = await collection.find({ _id: { $in: nfts } }).toArray()
 
         const update_nft_doc: _staked_nft[] = []
         if (existing_nft) {
 
             for (const nft of existing_nft) {
-                if (nft.onTrip || !nft.staked) continue
+                if (nft.activeTrip || !nft.isFrozen) continue
 
                 const updatedNft: _staked_nft = {
-                    _id: nft._id,
-                    type: nft.type,
-                    mintAddress: nft.mintAddress,
-                    owner: walletAddress,
-                    staked: false,
-                    unstakedAt: new Date(),
-                    stakedAt: undefined,
-                    boosted: false,
-                    onTrip: false,
+                    ...nft,
+                    isFrozen: false
 
                 };
                 update_nft_doc.push(updatedNft);
@@ -118,6 +105,7 @@ export async function unstake_nft(nfts: string[], walletAddress: string) {
             }));
 
             await collection.bulkWrite(bulkOps);
+            await update_user_nft_amount(walletAddress)
         }
         return { message: "NFT Unstaked", error: "" }
     } catch (error) {
@@ -147,33 +135,34 @@ class CreateNft {
     private createMiner(data: Partial<_miner_nft>): _miner_nft {
         return {
             _id: data.mintAddress!,
-            staked: true,
+            isFrozen: true,
             mintAddress: data.mintAddress!,
             type: "miner",
             owner: data.owner!,
-            stakedAt: new Date(),
-            unstakedAt: undefined,
-            boosted: false,
-            onTrip: false,
-            levelHarvest: 1,
-            levelMemory: 1,
-            tripStartedAt: undefined,
+            activeTrip: null,
             totalNuggetHarvested: 0,
+            image: "",
+            name: "",
+            stats: {
+                levelMemory: 1,
+                levelHarvest: 1
+            }
         }
     }
     private createRefiner(data: Partial<_refiner_nft>): _refiner_nft {
         return {
             _id: data.mintAddress!,
-            staked: true,
+            isFrozen: true,
             mintAddress: data.mintAddress!,
             type: "refiner",
             owner: data.owner!,
-            stakedAt: new Date(),
-            unstakedAt: undefined,
-            boosted: false,
-            onTrip: false,
-            levelRefine: 1,
+            activeTrip: null,
             totalGoldRefined: 0,
+            image: "",
+            name: "",
+            stats: {
+                levelRefine: 1
+            }
         };
     }
 
@@ -181,3 +170,82 @@ class CreateNft {
         return this.nft
     }
 }
+
+export async function get_user_nft(req: Request, res: Response): Promise<void> {
+    try {
+        if (!req.user?.pubkey) {
+            res.status(401).json({ message: "Unauthorized : no user found in jwt" })
+        }
+        const user = req.user
+        const db = (await mongo_client.getInstance()).db("private_data")
+        const collection = db.collection<_staked_nft>("nfts")
+        const owned_nft = await collection.aggregate([
+            {
+                $search: {
+                    index: "owner",
+                    text: {
+                        query: user?.pubkey,
+                        path: "owner"
+                    }
+                }
+            }
+        ]).toArray()
+
+        res.json({ owned_nft })
+    } catch (error) {
+        res.status(500).json({ message: "Internal : Unknown error", error })
+    }
+}
+
+async function update_user_nft_amount(walletAddress: string) {
+    try {
+        const db = (await mongo_client.getInstance()).db("private_data")
+        const collection = db.collection<_staked_nft>("nfts")
+        const owned_nft = await collection.aggregate([
+            {
+                $search: {
+                    index: "owner",
+                    text: {
+                        query: walletAddress,
+                        path: "owner"
+                    }
+                }
+            }
+        ]).toArray()
+
+        if (owned_nft.length === 0) {
+            throw new Error("No staked NFT")
+        } else {
+            //
+            const miners = owned_nft.filter((elem) => elem.type === "miner")
+            const refiners = owned_nft.filter((elem) => elem.type === "refiner")
+            const miners_id = miners.map((miner) => miner._id)
+            const refiners_id = refiners.map((refiner) => refiner._id)
+
+            const user_collection = db.collection<_user_doc>("users")
+            const get_user_doc = await user_collection.findOne({ _id: walletAddress })
+
+            if (!get_user_doc) {
+                throw new Error("No user doc")
+            } else {
+                await user_collection.updateOne({ _id: walletAddress }, {
+                    $set: {
+                        owned_miners: miners_id,
+                        owned_refiners: refiners_id,
+                        data: {
+                            ...get_user_doc.data,
+                            totalMiners: miners.length,
+                            totalRefiners: refiners.length
+                        }
+                    }
+                })
+            }
+        }
+    } catch (error) {
+        console.error(error);
+        throw error
+
+    }
+}
+
+// TODO check why update user nft amount dont work when done just after update mongo, maybe add a delay ?
