@@ -51,15 +51,76 @@ function manage_miners_emission(miners: _staked_miners[]): void {
   }
 }
 
+export async function claim_nft_trip(req: Request, res: Response): Promise<void> {
+  try {
+    const { location }: _trip_interaction = req.body
+    const user = req.user
+    const get_nfts = req.nftList
+    const db_public = (await mongo_client.getInstance()).db("public_data")
+    const db_priv = (await mongo_client.getInstance()).db("private_data")
+    const collection_trips = location === "mine" ? db_public.collection<_db_trip_data_doc>("mine_data") : db_public.collection<_db_trip_data_doc>("foundry_data")
+    const collection_nfts = db_priv.collection<_staked_nft>("nfts")
+
+    if (get_nfts.length === 0) {
+      res.status(404).json({ message: "No nft found", error: "" })
+      return
+    }
+
+    const tripPromise = get_nfts.map(async (nft) => {
+      return Trip.claim(nft.owner, nft, location)
+    })
+
+    const trip_ready_to_claim = await Promise.all(tripPromise)
+    const prepare_doc = trip_ready_to_claim.map(obj => ({
+      updateOne: {
+        filter: { _id: obj?._id },
+        update: {
+          $set: <_db_trip_data_doc>{
+            ...obj
+          }
+        }
+      }
+    }))
+    const claim_trip = await collection_trips.bulkWrite(prepare_doc)
+
+    if (!claim_trip) {
+      throw new Error("Unable to claim")
+    }
+    // update nfts
+
+    const updated_nft = trip_ready_to_claim.map(obj => ({
+      updateOne: {
+        filter: { _id: obj?.nftId },
+        update: {
+          $set: <_staked_nft>{
+            isOnTrip: false,
+            activeTrip: null
+          }
+        }
+      }
+    }))
+
+    const update_nfts = await collection_nfts.bulkWrite(updated_nft)
+    if (!update_nfts) {
+      throw new Error("Unable to claim")
+    }
+    res.json({ message: "success" })
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error", error: error instanceof Error ? error.message : "Unknown" });
+  }
+}
+
 export async function send_nfts_to_trip(req: Request, res: Response): Promise<void> {
   try {
-    const { nfts, location }: _trip_interaction = req.body // array of mint address and location
+    const { location }: _trip_interaction = req.body // array of mint address and location
     const user = req.user
+    const get_nfts = req.nftList
     const db_priv = (await mongo_client.getInstance()).db("private_data")
     const db_public = (await mongo_client.getInstance()).db("public_data")
     const collection_nfts = db_priv.collection<_staked_nft>("nfts")
     const collection_trips = location === "mine" ? db_public.collection<_db_trip_data_doc>("mine_data") : db_public.collection<_db_trip_data_doc>("foundry_data")
-    const get_nfts = await collection_nfts.find({ _id: { $in: nfts } }).toArray()
 
     if (get_nfts.length === 0) {
       res.status(404).json({ message: "No nft found", error: "" })
@@ -67,37 +128,21 @@ export async function send_nfts_to_trip(req: Request, res: Response): Promise<vo
     }
 
     const tripPromises = get_nfts.map(async (nft) => {
-      // check if user own the nft
-      if (nft.owner !== user?.pubkey) {
-        throw new Error(`User (${user?.pubkey}) doesn't own NFT (${nft._id})`);
-      }
-      // check if nft is not already in a trip
-      if (nft.isOnTrip) {
-        throw new Error(`NFT (${nft._id}) is already in a trip`);
-      }
-      // check if nft is staked
-      if (!nft.isFrozen) {
-        throw new Error(`NFT (${nft._id}) is not frozen`);
-      }
-      // check if nft can access this location
-      if (nft.type === "miner" && location !== "mine" || nft.type === "refiner" && location !== "foundry") {
-        throw new Error(`${nft.type} (${nft._id}) cannot access (${location})`);
-      }
-
       return Trip.create(nft.owner, nft._id, location);
     });
 
-    const nft_ready_to_send = await Promise.all(tripPromises);
+    const trip_ready_to_send = await Promise.all(tripPromises);
 
-    const send_trip = await collection_trips.insertMany(nft_ready_to_send);
-    // je bloque ici ↓↓
+    const send_trip = await collection_trips.insertMany(trip_ready_to_send);
+
     if (send_trip) {
-      const update_nft = nft_ready_to_send.map(obj => ({
+      const update_nft = trip_ready_to_send.map(obj => ({
         updateOne: {
           filter: { _id: obj.nftId },
           update: {
-            $set: {
-              activeTrip: <_active_trip>{
+            $set: <_staked_nft>{
+              isOnTrip: true,
+              activeTrip: {
                 tripId: obj._id,
                 startedAt: obj.startedAt,
                 endedAt: null,
@@ -106,7 +151,7 @@ export async function send_nfts_to_trip(req: Request, res: Response): Promise<vo
                 owner: obj.owner,
                 isLost: obj.isLost,
                 lostUntil: obj.lostUntil,
-                isStucked: obj.isStucked
+                isStucked: obj.isStucked,
               }
             }
           }
@@ -145,7 +190,7 @@ class Trip implements _db_trip_data_doc {
 
   static async create(owner: string, nftId: string, location: "mine" | "foundry"): Promise<Trip> {
     // Start a trip
-    const tripId = await Trip.generateTripId(location)
+    const tripId = await Trip.getTripId(location)
     const tripData: _db_trip_data_doc = {
       _id: tripId,
       nftId,
@@ -162,22 +207,50 @@ class Trip implements _db_trip_data_doc {
     return new Trip(tripData)
   }
 
-  static async claim(trips: { owner: string, nftId: string }[], location: "mine" | "foundry") {
+  static async claim(owner: string, nft: _staked_nft, location: "mine" | "foundry") {
     // Claim trips
+    // TODO add the claim logic like bad event etc
     const db = (await mongo_client.getInstance()).db("public_data")
     const collection = db.collection<_db_trip_data_doc>(`${location}_data`)
+    const get_trip = await collection.findOne({ _id: nft.activeTrip?.tripId })
+
+    if (get_trip) {
+      const finishedTrip: _db_trip_data_doc = {
+        ...get_trip,
+        claimed: true,
+        claimedAt: new Date(),
+
+      }
+      await this.update_location(location)
+      return new Trip(finishedTrip)
+    }
 
   }
 
-  private static async generateTripId(location: "mine" | "foundry"): Promise<number> {
+  private static async update_location(location: "mine" | "foundry"): Promise<void> {
+    const db = (await mongo_client.getInstance()).db("public_data");
+    const collection = location === "mine" ? db.collection<_db_mine_data_doc__default>("mine_data") : db.collection<_db_foundry_data_doc__default>("foundry_data")
+    const totalNftParameter = location === "mine" ? "totalMiners" : "totalRefiners"
+    const result = await (collection as Collection<_db_foundry_data_doc__default | _db_mine_data_doc__default>).findOneAndUpdate(
+      { _id: "default" },
+      { $inc: { [totalNftParameter]: -1 } }, // Incrémente atomiquement
+      { returnDocument: "after", upsert: false }
+    );
+    if (result === null) {
+      throw new Error("Unable to get a tripId")
+    }
+    return
+  }
+
+  private static async getTripId(location: "mine" | "foundry"): Promise<number> {
     // generate a tripId
     const db = (await mongo_client.getInstance()).db("public_data");
     const collection = location === "mine" ? db.collection<_db_mine_data_doc__default>("mine_data") : db.collection<_db_foundry_data_doc__default>("foundry_data")
-
+    const totalNftParameter = location === "mine" ? "totalMiners" : "totalRefiners"
     const result = await (collection as Collection<_db_foundry_data_doc__default | _db_mine_data_doc__default>).findOneAndUpdate(
       { _id: "default" },
-      { $inc: { currentTripId: 1 } }, // Incrémente atomiquement
-      { returnDocument: "after", upsert: true }
+      { $inc: { currentTripId: 1, [totalNftParameter]: 1 } }, // Incrémente atomiquement
+      { returnDocument: "after", upsert: false }
     );
     if (result === null) {
       throw new Error("Unable to get a tripId")
@@ -186,5 +259,3 @@ class Trip implements _db_trip_data_doc {
   }
 
 }
-
-const test = Trip.create("", "", "mine")

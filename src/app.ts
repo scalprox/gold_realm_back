@@ -1,10 +1,11 @@
 import "./sentry";
 import cookieParser from "cookie-parser"
+import apiRoutes from "./routes/api.routes";
 import * as Sentry from "@sentry/node";
 import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import cors from "cors";
-import { _jwt_payload } from "./types/models.type";
+import { _jwt_payload, _staked_nft } from "./types/models.type";
 
 dotenv.config();
 
@@ -43,8 +44,7 @@ app.get("/", (req: Request, res: Response) => {
   res.send("Bienvenue sur le serveur !");
 });
 
-// Importer les routes d'API
-import apiRoutes from "./routes/api";
+
 app.use("/api", apiRoutes);
 
 // Démarrer le serveur
@@ -57,6 +57,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: _jwt_payload
+      nftList: _staked_nft[]
     }
   }
 }
