@@ -116,17 +116,20 @@ export interface _staked_nft_base {
   image: string | ""
   isFrozen: boolean
   name: string
-  activeTrip: {
-    tripId: number
-    startedAt: Date
-    endedAt: Date | null
-    totalEmitted: number
-    claimed: boolean
-    owner: string
-    lost: boolean
-    lostUntil: Date | null
-    stucked: boolean
-  } | null
+  isOnTrip: boolean
+  activeTrip: _active_trip | null
+}
+
+export interface _active_trip {
+  tripId: number
+  startedAt: Date
+  endedAt: Date | null
+  currentEmission: number
+  claimed: boolean
+  owner: string
+  isLost: boolean
+  lostUntil: Date | null
+  isStucked: boolean
 }
 
 export interface _user_owned_nft {
@@ -186,3 +189,55 @@ export interface _jwt_payload {
   role: string | "user";
 }
 
+export interface _trip_interaction {
+  nfts: string[]
+  location: "mine" | "foundry"
+}
+
+export interface _db_mine_data_doc__default {
+  /**
+   * @info doc Default store location data such as emission, total miner..
+   */
+  _id: "default"
+  totalMiners: number
+  stuckedMiners: number
+  lostMiners: number
+  totalEmitted: Number
+  boosted: boolean
+  /**
+   * @info Show the last trip id given to a player, (changing at every trip)
+   */
+  currentTripId: number
+}
+
+export interface _db_foundry_data_doc__default {
+  /**
+   * @info doc Default store location data such as emission, total miner..
+   */
+  _id: "default"
+  totalRefiners: number
+  /**
+   * @info Amount of Nugget converted in Ingot
+   */
+  totalRafined: number
+  totalEmitted: Number
+  boosted: boolean
+  /**
+   * @info Show the last trip id given to a player, (changing at every trip)
+   */
+  currentTripId: number
+}
+
+export interface _db_trip_data_doc {
+  _id: number
+  nftId: string
+  owner: string
+  currentEmission: number
+  claimedEmission: number | null
+  startedAt: Date
+  claimedAt: Date | null
+  claimed: boolean
+  isLost: boolean
+  isStucked: boolean
+  lostUntil: Date | null
+}

@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { _new_nft } from "../types/models.type";
 import { get_user_nft, stake_nft, unstake_nft } from "../web3/manage_nft";
 import { get_auth_message, create_jwt, check_jwt, get_user_data, logout } from "../web3/manage_user";
+import { send_nfts_to_trip } from "../games/trip";
 
 const router = Router();
 
@@ -41,6 +42,10 @@ router.post("/nft/stakeNft", async (req, res) => {
     }
   }
 })
+
+router.post("/trip/send", send_nfts_to_trip)
+
+router.post("/trip/claim")
 
 router.post("/nft/unstakeNft", async (req, res) => {
   if (req.user?.pubkey) {

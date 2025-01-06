@@ -33,7 +33,7 @@ export async function stake_nft(nfts: _new_nft[], walletAddress: string) {
             const existing_ids = new Set(existing_nft.map((nft) => nft._id));
             const unknown_nft = nfts.filter((obj) => !existing_ids.has(obj.mintAddress));
             for (const nft of unknown_nft) {
-                const create_doc = new CreateNft(nft).getNft()
+                const create_doc = new Nft(nft).getNft()
                 update_nft_doc.push({
                     ...create_doc
                 })
@@ -41,7 +41,7 @@ export async function stake_nft(nfts: _new_nft[], walletAddress: string) {
         } else {
             //no nft in db
             for (const nft of nfts) {
-                const create_doc = new CreateNft(nft).getNft()
+                const create_doc = new Nft(nft).getNft()
                 if (!update_nft_doc.some(doc => doc._id === create_doc._id)) {
                     update_nft_doc.push(create_doc);
                 }
@@ -112,62 +112,6 @@ export async function unstake_nft(nfts: string[], walletAddress: string) {
         console.error(error);
         throw error
 
-    }
-}
-
-class CreateNft {
-    private nft: _staked_nft
-
-    constructor(data: Pick<_staked_nft, "mintAddress" | "type" | "owner"> & Partial<_staked_nft>) {
-        if (!data.mintAddress || !data.type || !data.owner) {
-            throw new Error("Missing required fields: mintAddress, type, or owner");
-        }
-
-        if (data.type === "miner") {
-            this.nft = this.createMiner(data as Partial<_miner_nft>)
-        } else if (data.type === "refiner") {
-            this.nft = this.createRefiner(data as Partial<_refiner_nft>)
-        } else {
-            throw new Error("Invalid type: must be 'miner' or 'refiner'");
-        }
-    }
-
-    private createMiner(data: Partial<_miner_nft>): _miner_nft {
-        return {
-            _id: data.mintAddress!,
-            isFrozen: true,
-            mintAddress: data.mintAddress!,
-            type: "miner",
-            owner: data.owner!,
-            activeTrip: null,
-            totalNuggetHarvested: 0,
-            image: "",
-            name: "",
-            stats: {
-                levelMemory: 1,
-                levelHarvest: 1
-            }
-        }
-    }
-    private createRefiner(data: Partial<_refiner_nft>): _refiner_nft {
-        return {
-            _id: data.mintAddress!,
-            isFrozen: true,
-            mintAddress: data.mintAddress!,
-            type: "refiner",
-            owner: data.owner!,
-            activeTrip: null,
-            totalGoldRefined: 0,
-            image: "",
-            name: "",
-            stats: {
-                levelRefine: 1
-            }
-        };
-    }
-
-    getNft(): _staked_nft {
-        return this.nft
     }
 }
 
@@ -249,3 +193,63 @@ async function update_user_nft_amount(walletAddress: string) {
 }
 
 // TODO check why update user nft amount dont work when done just after update mongo, maybe add a delay ?
+
+// CLASS ↓↓
+
+class Nft {
+    private nft: _staked_nft
+
+    constructor(data: Pick<_staked_nft, "mintAddress" | "type" | "owner"> & Partial<_staked_nft>) {
+        if (!data.mintAddress || !data.type || !data.owner) {
+            throw new Error("Missing required fields: mintAddress, type, or owner");
+        }
+
+        if (data.type === "miner") {
+            this.nft = this.createMiner(data as Partial<_miner_nft>)
+        } else if (data.type === "refiner") {
+            this.nft = this.createRefiner(data as Partial<_refiner_nft>)
+        } else {
+            throw new Error("Invalid type: must be 'miner' or 'refiner'");
+        }
+    }
+
+    private createMiner(data: Partial<_miner_nft>): _miner_nft {
+        return {
+            _id: data.mintAddress!,
+            isFrozen: true,
+            mintAddress: data.mintAddress!,
+            type: "miner",
+            owner: data.owner!,
+            isOnTrip: false,
+            activeTrip: null,
+            totalNuggetHarvested: 0,
+            image: "",
+            name: "",
+            stats: {
+                levelMemory: 1,
+                levelHarvest: 1
+            }
+        }
+    }
+    private createRefiner(data: Partial<_refiner_nft>): _refiner_nft {
+        return {
+            _id: data.mintAddress!,
+            isFrozen: true,
+            mintAddress: data.mintAddress!,
+            type: "refiner",
+            owner: data.owner!,
+            isOnTrip: false,
+            activeTrip: null,
+            totalGoldRefined: 0,
+            image: "",
+            name: "",
+            stats: {
+                levelRefine: 1
+            }
+        };
+    }
+
+    getNft(): _staked_nft {
+        return this.nft
+    }
+}
