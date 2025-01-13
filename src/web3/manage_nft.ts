@@ -2,6 +2,8 @@
 import { mongo_client } from "../utils";
 import { _miner_nft, _new_nft, _refiner_nft, _staked_nft, _staked_nft_base, _user_doc } from "../types/models.type";
 import { Request, Response } from "express";
+import { createError } from "../utils/errorUtils";
+import { createResponse } from "../utils/responseUtils";
 //user send stake demand with an array of mintAddres / first check if nft is known otherwise create it in db with base score / then stake it
 
 
@@ -61,9 +63,8 @@ export async function stake_nft(nfts: _new_nft[], walletAddress: string) {
             await collection.bulkWrite(bulkOps);
             await update_user_nft_amount(walletAddress)
         }
-        return { message: "NFT Staked", error: "" }
+        return { success: true }
     } catch (error) {
-        console.error(error);
         throw error
 
     }
@@ -107,18 +108,16 @@ export async function unstake_nft(nfts: string[], walletAddress: string) {
             await collection.bulkWrite(bulkOps);
             await update_user_nft_amount(walletAddress)
         }
-        return { message: "NFT Unstaked", error: "" }
+        return { success: true }
     } catch (error) {
-        console.error(error);
         throw error
-
     }
 }
 
 export async function get_user_nft(req: Request, res: Response): Promise<void> {
     try {
         if (!req.user?.pubkey) {
-            res.status(401).json({ message: "Unauthorized : no user found in jwt" })
+            res.status(400).json(createError({ type: "global", code: "PUBKEY_MISSING" }))
         }
         const user = req.user
         const db = (await mongo_client.getInstance()).db("private_data")
@@ -135,9 +134,9 @@ export async function get_user_nft(req: Request, res: Response): Promise<void> {
             }
         ]).toArray()
 
-        res.json({ owned_nft })
+        res.json(createResponse({ data: owned_nft, message: "" }))
     } catch (error) {
-        res.status(500).json({ message: "Internal : Unknown error", error })
+        res.status(500).json(createError({ type: "global", code: "INTERNAL", detail: error instanceof Error ? error : undefined }))
     }
 }
 
@@ -186,9 +185,7 @@ async function update_user_nft_amount(walletAddress: string) {
             }
         }
     } catch (error) {
-        console.error(error);
         throw error
-
     }
 }
 
@@ -226,8 +223,8 @@ class Nft {
             image: "",
             name: "",
             stats: {
-                levelMemory: 1,
-                levelHarvest: 1
+                harvestMultiplier: 1,
+                memory: 1
             }
         }
     }
@@ -244,7 +241,8 @@ class Nft {
             image: "",
             name: "",
             stats: {
-                levelRefine: 1
+                harvestMultiplier: 1,
+                memory: null
             }
         };
     }

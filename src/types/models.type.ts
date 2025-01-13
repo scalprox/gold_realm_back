@@ -147,15 +147,16 @@ export interface _miner_nft extends _staked_nft_base {
   type: "miner";
   totalNuggetHarvested: number;
   stats: {
-    levelHarvest: number;
-    levelMemory: number;
+    harvestMultiplier: number;
+    memory: number;
   }
 }
 
 export interface _refiner_nft extends _staked_nft_base {
   type: "refiner";
   stats: {
-    levelRefine: number;
+    harvestMultiplier: number;
+    memory: null
   }
   totalGoldRefined: number;
 }
@@ -231,6 +232,7 @@ export interface _db_foundry_data_doc__default {
 export interface _db_trip_data_doc {
   _id: number
   nftId: string
+  nftName: string
   owner: string
   currentEmission: number
   claimedEmission: number | null
@@ -240,4 +242,93 @@ export interface _db_trip_data_doc {
   isLost: boolean
   isStucked: boolean
   lostUntil: Date | null
+  claimEvent: "success" | "nothing" | "lost" | "stucked" | null
+  nftStats: {
+    multiplier: number,
+    memory: number | null
+  }
+}
+
+export interface _miner_trip_outcome {
+  success: number
+  nothing: number
+  lost: number
+  stuck: number
+}
+
+export interface _api_request {
+  success: true
+  message: string
+  data: {}
+
+}
+
+export interface _api_request_error {
+  success: false
+  error: _error
+  detail?: Error | undefined
+}
+
+export interface _response {
+  message: string,
+  data: {}
+}
+
+export type _error = {
+  code: _code_global
+  type: "global"
+  detail?: Error | undefined
+} | {
+  code: _code_user
+  type: "user"
+  detail?: Error | undefined
+} | {
+  code: _code_trip
+  type: "trip"
+  detail?: Error | undefined
+} | {
+  code: _code_nft
+  type: "nft"
+  detail?: Error | undefined
+}
+
+
+type _code_global =
+  "INTERNAL" |
+  "UNKNOWN" |
+  "NETWORK_ERROR" |
+  "MISSING_DATA_IN_REQUEST" |
+  "JWT_ERROR" |
+  "JWT_EXPIRED" |
+  "JWT_MISSING" |
+  "PUBKEY_MISSING" |
+  "WRONG_SIGNATURE" |
+  "NOT_HANDLED"
+
+type _code_user =
+  "USER_NOT_FOUND"
+
+type _code_trip =
+  "MINER_LOST" |
+  "MINER_STUCKED" |
+  "MINER_ALREADY_IN_TRIP" |
+  "MINER_NOT_IN_TRIP" |
+  "MINER_NOT_READY" |
+  "WRONG_LOCATION"
+
+
+
+type _code_nft =
+  "NFT_NOT_FOUND" |
+  "NFT_NOT_FROZEN" |
+  "WRONG_OWNER"
+
+export interface _claim_response_payload {
+  lost_claimed: { nftId: string, nftName: string }[] | null
+  success_claimed: {
+    event: "success" | "nothing" | "lost" | "stucked"
+    nftId: string
+    claimAmount: number
+    nftName: string
+  }[] | null
 }

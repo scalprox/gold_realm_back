@@ -7,6 +7,8 @@ import jwt, { JwtPayload } from "jsonwebtoken"
 import nacl from "tweetnacl"
 import bs58 from "bs58"
 import { NextFunction, Request, Response } from "express"
+import { createError } from "../utils/errorUtils"
+import { createResponse } from "../utils/responseUtils"
 
 export async function get_auth_message(req: Request, res: Response) {
     //user send his pubKey
@@ -51,12 +53,11 @@ export async function get_auth_message(req: Request, res: Response) {
 
             })
         }
-        res.json({ sign_message: signInData.sign_message })
+        res.json(createResponse({ data: { sign_message: signInData.sign_message }, message: "Sign this message to connect" }))
         return
 
     } catch (error) {
-        res.status(500).json({ message: "Unknown error", error })
-        throw error
+        res.status(500).json(createError({ type: "global", code: "INTERNAL", detail: error instanceof Error ? error : undefined }))
     }
 }
 
@@ -66,19 +67,19 @@ export async function check_jwt(req: Request, res: Response, next: NextFunction)
         const JWT = req.cookies.authToken
 
         if (!JWT) {
-            res.status(401).json({ message: "Unauthorized: No token provided" })
+            res.status(401).json(createError({ type: "global", code: "JWT_MISSING" }))
             return
         }
 
         if (!process.env.JWT_KEY) {
-            res.status(500).json({ message: "Unauthorized: Internal" });
+            res.status(500).json(createError({ type: "global", code: "INTERNAL" }))
             return
         }
         const decoded_jwt = jwt.verify(JWT, process.env.JWT_KEY as string) as _jwt_payload;
         const pubkey = decoded_jwt.pubkey
 
         if (decoded_jwt.exp < Date.now()) {
-            res.status(401).json({ message: "Unauthorized: Token expired" });
+            res.status(401).json(createError({ type: "global", code: "JWT_EXPIRED" }));
             return
         }
 
@@ -87,14 +88,14 @@ export async function check_jwt(req: Request, res: Response, next: NextFunction)
         const get_user_doc = await collection.findOne({ _id: pubkey })
 
         if (!get_user_doc || !get_user_doc.nonce) {
-            res.status(401).json({ message: "Unauthorized: User not found" });
+            res.status(401).json(createError({ type: "user", code: "USER_NOT_FOUND" }));
             return
         }
         req.user = decoded_jwt
         next()
 
     } catch (error) {
-        res.status(403).json({ message: "Forbidden: Invalid or expired token" });
+        res.status(500).json(createError({ type: "global", code: "INTERNAL", detail: error instanceof Error ? error : undefined }))
         return
     }
 }
@@ -106,7 +107,7 @@ export async function create_jwt(req: Request, res: Response) {
         const pubkey: string = req.body.publicKey
 
         if (!pubkey || !signature) {
-            res.status(400).send({ message: "Missing data" })
+            res.status(400).json(createError({ type: "global", code: "MISSING_DATA_IN_REQUEST" }))
             return
         }
 
@@ -139,7 +140,7 @@ export async function create_jwt(req: Request, res: Response) {
             const payload: _jwt_payload = { pubkey, iat: now, exp: add(now, { days: 1 }).getTime(), role: get_user_doc.role }
 
             if (!process.env.JWT_KEY) {
-                res.status(500).json({ message: "Temporarly unable to get JWT" })
+                res.status(500).json(createError({ type: "global", code: "INTERNAL" }))
                 return
             }
 
@@ -151,19 +152,17 @@ export async function create_jwt(req: Request, res: Response) {
                 sameSite: "strict",
                 maxAge: 24 * 60 * 60 * 1000//1day
             })
-            res.status(200).json({ message: "Connected" })
+            res.status(200).json(createResponse({ message: "Connected", data: {} }))
             return
         } else {
             // siganture invalid, delete message in db / maybe log the pubkey and ip ?
             await collection.updateOne({ _id: pubkey }, { $set: { nonce: "", sign_message: "" } })
-            res.status(401).json({ message: "Wrong signature" })
+            res.status(401).json(createError({ type: "global", code: "WRONG_SIGNATURE" }))
             return
         }
 
     } catch (error) {
-        console.error(error);
-
-        res.status(500).json({ message: "Unknown error" })
+        res.status(500).json(createError({ type: "global", code: "INTERNAL", detail: error instanceof Error ? error : undefined }))
     } finally {
         const db = (await mongo_client.getInstance()).db("private_data")
         const collection = db.collection<_user_doc>(("users"))
@@ -180,14 +179,12 @@ export async function get_user_data(req: Request, res: Response): Promise<void> 
         const user_doc = await collection.findOne({ _id: user?.pubkey })
 
         if (!user_doc?.data) {
-            res.status(404).json({ message: "User doc not found" })
+            res.status(404).json(createError({ type: "user", code: "USER_NOT_FOUND" }))
             return
         }
-        res.json({
-            data: user_doc.data
-        })
+        res.json(createResponse({ data: user_doc.data, message: "" }))
     } catch (error) {
-        res.status(500).json({ message: "Internal : Unknown error", error })
+        res.status(500).json(createError({ type: "global", code: "INTERNAL", detail: error instanceof Error ? error : undefined }))
     }
 }
 
@@ -199,15 +196,9 @@ export function logout(req: Request, res: Response): void {
             httpOnly: true,
             sameSite: "strict"
         })
-        res.status(200).send("Logged out")
+        res.status(200).send(createResponse({ data: {}, message: "Logged out." }))
     } catch (error) {
-        if (error instanceof Error) {
-            res.status(500).json({ mesage: "Error occured", error: error.message })
-        } else {
-            res.status(500).json({ mesage: "Error occured", error: "Unknown" })
-
-        }
-
+        res.status(500).json(createError({ type: "global", code: "INTERNAL", detail: error instanceof Error ? error : undefined }))
     }
 }
 

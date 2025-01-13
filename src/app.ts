@@ -1,4 +1,5 @@
 import "./sentry";
+import "./scheduler/scheduler.ts"
 import cookieParser from "cookie-parser"
 import apiRoutes from "./routes/api.routes";
 import * as Sentry from "@sentry/node";
@@ -17,6 +18,7 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 Sentry.setupExpressErrorHandler(app);
+
 
 app.use(
   cors({
@@ -38,12 +40,9 @@ app.use((req, res, next) => {
   next()
 
 })
+//test
 
 // Routes de base
-app.get("/", (req: Request, res: Response) => {
-  res.send("Bienvenue sur le serveur !");
-});
-
 
 app.use("/api", apiRoutes);
 
@@ -57,7 +56,11 @@ declare global {
   namespace Express {
     interface Request {
       user?: _jwt_payload
-      nftList: _staked_nft[]
+      nftList: {
+        toClaim?: _staked_nft[]
+        lostNft?: _staked_nft[]
+        toSend?: _staked_nft[]
+      }
     }
   }
 }
